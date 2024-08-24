@@ -9,7 +9,7 @@ class UploadPDF extends StatelessWidget {
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/api/process_pdf/'),
+        Uri.parse('http://10.0.2.2:8000/api/process_pdf_gemini/'),
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         },
@@ -94,18 +94,27 @@ class UploadPDF extends StatelessWidget {
               PlatformFile file = result.files.first;
               FirebaseStorage storage = FirebaseStorage.instance;
               Reference ref = storage.ref().child('uploads/${file.name}');
-              UploadTask uploadTask = ref.putFile(File(file.path!));
+
+              // Crea un metadata con el tipo MIME
+              final metadata = SettableMetadata(
+                contentType: 'application/pdf',
+              );
+
+              // Sube el archivo con el metadata
+              UploadTask uploadTask = ref.putFile(
+                File(file.path!),
+                metadata,
+              );
+
               TaskSnapshot taskSnapshot = await uploadTask;
               String downloadUrl = await taskSnapshot.ref.getDownloadURL();
 
               // Procesa el PDF subido
               await _processUploadedPDF(context, downloadUrl);
             } else {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  content: Text('No se seleccionó ningún archivo'),
-                ),
+              // El usuario canceló la selección del archivo
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('No se seleccionó ningún archivo')),
               );
             }
           },
