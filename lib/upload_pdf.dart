@@ -13,22 +13,6 @@ class UploadPDF extends StatefulWidget {
 
 class _UploadPDFState extends State<UploadPDF> {
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
-    // Muestra el diálogo de carga
-    final loadingDialog = showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Cargando'),
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('Por favor, espere...'),
-          ],
-        ),
-      ),
-    );
 
     try {
       final response = await http.post(
@@ -107,9 +91,27 @@ class _UploadPDFState extends State<UploadPDF> {
         child: ElevatedButton(
           child: Text("Seleccionar y subir PDF"),
           onPressed: () async {
+
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['pdf'],
+            );
+
+            // Muestra el diálogo de carga
+            final loadingDialog = showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: Text('Cargando'),
+                content: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    CircularProgressIndicator(),
+                    SizedBox(width: 20),
+                    Text('Por favor, espere...'),
+                  ],
+                ),
+              ),
             );
 
             if (result != null) {
