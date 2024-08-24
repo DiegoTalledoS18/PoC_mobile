@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart'; // Importa el paquete para generar UUIDs
 import 'questionspage.dart';
 
 class UploadPDF extends StatefulWidget {
@@ -13,7 +14,6 @@ class UploadPDF extends StatefulWidget {
 
 class _UploadPDFState extends State<UploadPDF> {
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
-
     try {
       final response = await http.post(
         Uri.parse('http://10.0.2.2:8000/api/process_pdf_gemini/'),
@@ -26,13 +26,9 @@ class _UploadPDFState extends State<UploadPDF> {
       );
 
       if (response.statusCode == 200) {
-        // Decodifica la respuesta JSON
         final Map<String, dynamic> data = jsonDecode(response.body);
+        hideLoadingDialog(context);
 
-        // Cierra el diálogo de carga
-        Navigator.of(context).pop();
-
-        // Navega a la nueva página pasando el JSON como argumento
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -40,9 +36,7 @@ class _UploadPDFState extends State<UploadPDF> {
           ),
         );
       } else {
-        // Si la solicitud falló, muestra un mensaje de error
-        Navigator.of(context).pop(); // Cierra el diálogo de carga
-
+        Navigator.of(context).pop();
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -60,9 +54,7 @@ class _UploadPDFState extends State<UploadPDF> {
         );
       }
     } catch (e) {
-      // Si ocurre un error en la solicitud, muestra un mensaje de error
-      Navigator.of(context).pop(); // Cierra el diálogo de carga
-
+      Navigator.of(context).pop();
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -81,6 +73,28 @@ class _UploadPDFState extends State<UploadPDF> {
     }
   }
 
+  void showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Cargando'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Por favor, espere...'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void hideLoadingDialog(BuildContext context) {
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,34 +111,27 @@ class _UploadPDFState extends State<UploadPDF> {
               allowedExtensions: ['pdf'],
             );
 
-            // Muestra el diálogo de carga
-            final loadingDialog = showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                title: Text('Cargando'),
-                content: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    CircularProgressIndicator(),
-                    SizedBox(width: 20),
-                    Text('Por favor, espere...'),
-                  ],
-                ),
-              ),
-            );
 
             if (result != null) {
+
+              showLoadingDialog(context);
+
               PlatformFile file = result.files.first;
               FirebaseStorage storage = FirebaseStorage.instance;
-              Reference ref = storage.ref().child('uploads/${file.name}');
 
-              // Crea un metadata con el tipo MIME
+              // Genera un UUID
+              var uuid = Uuid();
+              String uniqueId = uuid.v4();
+
+              // Crea un nombre único para el archivo
+              String uniqueFileName = '${uniqueId}_${file.name}';
+
+              Reference ref = storage.ref().child('uploads/$uniqueFileName');
+
               final metadata = SettableMetadata(
                 contentType: 'application/pdf',
               );
 
-              // Sube el archivo con el metadata
               UploadTask uploadTask = ref.putFile(
                 File(file.path!),
                 metadata,
@@ -133,10 +140,8 @@ class _UploadPDFState extends State<UploadPDF> {
               TaskSnapshot taskSnapshot = await uploadTask;
               String downloadUrl = await taskSnapshot.ref.getDownloadURL();
 
-              // Procesa el PDF subido
               await _processUploadedPDF(context, downloadUrl);
             } else {
-              // El usuario canceló la selección del archivo
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('No se seleccionó ningún archivo')),
               );
