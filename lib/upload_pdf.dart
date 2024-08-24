@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
+import 'questionspage.dart';
 
 class UploadPDF extends StatelessWidget {
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
@@ -19,22 +20,14 @@ class UploadPDF extends StatelessWidget {
       );
 
       if (response.statusCode == 200) {
-        // Si la solicitud fue exitosa, muestra la respuesta
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Respuesta del servidor'),
-            content: SingleChildScrollView(
-              child: Text(response.body),
-            ),
-            actions: <Widget>[
-              TextButton(
-                child: Text('OK'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
+        // Decodifica la respuesta JSON
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        // Navega a la nueva página pasando el JSON como argumento
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => QuestionsPage(questions: data),
           ),
         );
       } else {
@@ -74,6 +67,7 @@ class UploadPDF extends StatelessWidget {
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
