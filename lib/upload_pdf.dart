@@ -6,8 +6,30 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'questionspage.dart';
 
-class UploadPDF extends StatelessWidget {
+class UploadPDF extends StatefulWidget {
+  @override
+  _UploadPDFState createState() => _UploadPDFState();
+}
+
+class _UploadPDFState extends State<UploadPDF> {
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
+    // Muestra el diálogo de carga
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Cargando'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Por favor, espere...'),
+          ],
+        ),
+      ),
+    );
+
     try {
       final response = await http.post(
         Uri.parse('http://10.0.2.2:8000/api/process_pdf_gemini/'),
@@ -23,6 +45,9 @@ class UploadPDF extends StatelessWidget {
         // Decodifica la respuesta JSON
         final Map<String, dynamic> data = jsonDecode(response.body);
 
+        // Cierra el diálogo de carga
+        Navigator.of(context).pop();
+
         // Navega a la nueva página pasando el JSON como argumento
         Navigator.push(
           context,
@@ -32,6 +57,8 @@ class UploadPDF extends StatelessWidget {
         );
       } else {
         // Si la solicitud falló, muestra un mensaje de error
+        Navigator.of(context).pop(); // Cierra el diálogo de carga
+
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -50,6 +77,8 @@ class UploadPDF extends StatelessWidget {
       }
     } catch (e) {
       // Si ocurre un error en la solicitud, muestra un mensaje de error
+      Navigator.of(context).pop(); // Cierra el diálogo de carga
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -67,7 +96,6 @@ class UploadPDF extends StatelessWidget {
       );
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
