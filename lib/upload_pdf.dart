@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:uuid/uuid.dart'; // Importa el paquete para generar UUIDs
 import 'questionspage.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+
 
 class UploadPDF extends StatefulWidget {
   @override
@@ -13,6 +14,24 @@ class UploadPDF extends StatefulWidget {
 }
 
 class _UploadPDFState extends State<UploadPDF> {
+  Future<void> _showLoadingDialog(BuildContext context, String message) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Cargando'),
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text(message),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
     try {
       final response = await http.post(
@@ -27,8 +46,7 @@ class _UploadPDFState extends State<UploadPDF> {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-        hideLoadingDialog(context);
-
+        Navigator.of(context).pop(); // Cierra el diálogo de carga
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -36,7 +54,7 @@ class _UploadPDFState extends State<UploadPDF> {
           ),
         );
       } else {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(); // Cierra el diálogo de carga
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -54,7 +72,7 @@ class _UploadPDFState extends State<UploadPDF> {
         );
       }
     } catch (e) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(); // Cierra el diálogo de carga
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -73,26 +91,18 @@ class _UploadPDFState extends State<UploadPDF> {
     }
   }
 
-  void showLoadingDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Cargando'),
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('Por favor, espere...'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void hideLoadingDialog(BuildContext context) {
-    Navigator.of(context, rootNavigator: true).pop();
+  Future<bool> isPDFValid(File pdfFile) async {
+    try {
+      // Intenta leer el PDF
+      final bytes = await pdfFile.readAsBytes();
+      // Intenta crear un documento PDF a partir de los bytes
+      PdfDocument.fromBase64String(base64Encode(bytes));
+      return true;
+    } catch (e) {
+      // Si hay una excepción, el PDF es probablemente inválido
+      print('Error al validar PDF: $e');
+      return false;
+    }
   }
 
   @override
@@ -105,40 +115,44 @@ class _UploadPDFState extends State<UploadPDF> {
         child: ElevatedButton(
           child: Text("Seleccionar y subir PDF"),
           onPressed: () async {
-
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['pdf'],
             );
 
-
             if (result != null) {
-
-              showLoadingDialog(context);
-
               PlatformFile file = result.files.first;
+              File pdfFile = File(file.path!);
+
+              // Verificar si el PDF es válido
+              bool isValid = await isPDFValid(pdfFile);
+              if (!isValid) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('El archivo PDF seleccionado es inválido o está corrupto.')),
+                );
+                return;
+              }
+
+
+              await _showLoadingDialog(context, 'Subiendo PDF...');
+
               FirebaseStorage storage = FirebaseStorage.instance;
-
-              // Genera un UUID
-              var uuid = Uuid();
-              String uniqueId = uuid.v4();
-
-              // Crea un nombre único para el archivo
-              String uniqueFileName = '${uniqueId}_${file.name}';
-
-              Reference ref = storage.ref().child('uploads/$uniqueFileName');
+              Reference ref = storage.ref().child('uploads/${file.name}');
 
               final metadata = SettableMetadata(
                 contentType: 'application/pdf',
               );
 
               UploadTask uploadTask = ref.putFile(
-                File(file.path!),
+                pdfFile,
                 metadata,
               );
 
               TaskSnapshot taskSnapshot = await uploadTask;
               String downloadUrl = await taskSnapshot.ref.getDownloadURL();
+
+              Navigator.of(context).pop(); // Cierra el diálogo de carga
+              await _showLoadingDialog(context, 'Generando preguntas...');
 
               await _processUploadedPDF(context, downloadUrl);
             } else {
