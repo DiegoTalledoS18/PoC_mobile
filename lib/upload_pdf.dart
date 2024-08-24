@@ -1,9 +1,80 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 
 class UploadPDF extends StatelessWidget {
+  Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:8000/api/process_pdf/'),
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: jsonEncode(<String, String>{
+          'pdf_url': downloadUrl,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // Si la solicitud fue exitosa, muestra la respuesta
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Respuesta del servidor'),
+            content: SingleChildScrollView(
+              child: Text(response.body),
+            ),
+            actions: <Widget>[
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Si la solicitud falló, muestra un mensaje de error
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Error'),
+            content: Text('Error en la solicitud: ${response.statusCode}'),
+            actions: <Widget>[
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      // Si ocurre un error en la solicitud, muestra un mensaje de error
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Error'),
+          content: Text('Error al procesar el PDF: $e'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -14,34 +85,22 @@ class UploadPDF extends StatelessWidget {
         child: ElevatedButton(
           child: Text("Seleccionar y subir PDF"),
           onPressed: () async {
-            // Selecciona el archivo PDF
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['pdf'],
             );
 
             if (result != null) {
-              // Obtiene el archivo
               PlatformFile file = result.files.first;
-
-              // Sube el archivo a Firebase Storage
               FirebaseStorage storage = FirebaseStorage.instance;
               Reference ref = storage.ref().child('uploads/${file.name}');
               UploadTask uploadTask = ref.putFile(File(file.path!));
               TaskSnapshot taskSnapshot = await uploadTask;
-
-              // Obtiene la URL de descarga
               String downloadUrl = await taskSnapshot.ref.getDownloadURL();
 
-              // Muestra la URL en un AlertDialog
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  content: Text('URL del archivo subido: $downloadUrl'),
-                ),
-              );
+              // Procesa el PDF subido
+              await _processUploadedPDF(context, downloadUrl);
             } else {
-              // Muestra un mensaje si no se seleccionó ningún archivo
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
