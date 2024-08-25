@@ -6,6 +6,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'questionspage.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'dart:async';
+import 'package:uuid/uuid.dart';
+
 
 
 class UploadPDF extends StatefulWidget {
@@ -33,16 +36,28 @@ class _UploadPDFState extends State<UploadPDF> {
   }
 
   Future<void> _processUploadedPDF(BuildContext context, String downloadUrl) async {
+    final timeoutDuration = Duration(seconds: 30);
+
     try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/api/process_pdf_gemini/'),
+
+      // Imprime la URL generada en la consola
+      print('URL del PDF generado: $downloadUrl');
+
+      final response = await http
+          .post(
+        Uri.parse('http://10.0.2.2:8000/api/process_pdf_claude/'),
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         },
         body: jsonEncode(<String, String>{
           'pdf_url': downloadUrl,
         }),
-      );
+      )
+          .timeout(timeoutDuration, onTimeout: () {
+        Navigator.of(context).pop();
+        _showErrorDialog(context, 'El proceso tomó demasiado tiempo y fue cancelado.');
+        throw Exception('Timeout');
+      });
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
@@ -55,40 +70,31 @@ class _UploadPDFState extends State<UploadPDF> {
         );
       } else {
         Navigator.of(context).pop(); // Cierra el diálogo de carga
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Error'),
-            content: Text('Error en la solicitud: ${response.statusCode}'),
-            actions: <Widget>[
-              TextButton(
-                child: Text('OK'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
-        );
+        _showErrorDialog(context, 'Error en la solicitud: ${response.statusCode}');
       }
     } catch (e) {
       Navigator.of(context).pop(); // Cierra el diálogo de carga
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Error'),
-          content: Text('Error al procesar el PDF: $e'),
-          actions: <Widget>[
-            TextButton(
-              child: Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        ),
-      );
+      _showErrorDialog(context, 'Error al procesar el PDF: $e');
     }
+  }
+
+
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            child: Text('OK'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> isPDFValid(File pdfFile) async {
@@ -133,11 +139,17 @@ class _UploadPDFState extends State<UploadPDF> {
                 return;
               }
 
-
               await _showLoadingDialog(context, 'Subiendo PDF...');
 
               FirebaseStorage storage = FirebaseStorage.instance;
-              Reference ref = storage.ref().child('uploads/${file.name}');
+              // Genera un UUID
+              var uuid = Uuid();
+              String uniqueId = uuid.v4();
+
+              // Crea un nombre único para el archivo
+              String uniqueFileName = '${uniqueId}_${file.name}';
+
+              Reference ref = storage.ref().child('uploads/$uniqueFileName');
 
               final metadata = SettableMetadata(
                 contentType: 'application/pdf',
